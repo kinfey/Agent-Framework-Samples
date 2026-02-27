@@ -35,7 +35,7 @@ This repository provides step-by-step tutorials and real-world examples covering
 
 ***Note: This is installation guideline***
 
-> ⚠️ **Important Notice**: Microsoft Agent Framework is currently in the **development/preview stage**. Since the framework APIs and features may change frequently, **we strongly recommend building from source** rather than using NuGet packages to ensure you have the latest updates and bug fixes.
+> ⚠️ **Important Notice**: Microsoft Agent Framework(RC2) is currently in the **development/preview stage**. Since the framework APIs and features may change frequently, **we strongly recommend building from source** rather than using NuGet packages to ensure you have the latest updates and bug fixes.
 
 > 📌 **Additional Notes**: 
 > 1. The examples in this repository are primarily based on **GitHub Models** and **Microsoft Foundry**. You can access GitHub Models directly at https://gh.io/models
