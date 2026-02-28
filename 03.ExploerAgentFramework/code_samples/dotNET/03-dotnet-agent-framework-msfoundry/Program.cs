@@ -6,7 +6,7 @@ using Microsoft.Extensions.AI;
 using DotNetEnv;
 
 
-Env.Load("/Users/lokinfey/Desktop/AOAI/Foundry/Agent-Framework-Samples/.env");
+Env.Load("../../../../.env");
 
 var endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
 var deploymentName = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-4o-mini";
