@@ -1,48 +1,54 @@
 ﻿#pragma warning disable MEAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+#pragma warning disable OPENAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
 
-using System;
-using System.Linq;
-
-using Azure.AI.Agents.Persistent;
+using Azure.AI.Projects;
+using Azure.AI.Projects.Agents;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-
+using OpenAI.Responses;
 using DotNetEnv;
 
 Env.Load("../../../../../.env");
 
-var azure_foundry_endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_FOUNDRY_PROJECT_ENDPOINT is not set.");
-var azure_foundry_model_id = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME") ?? "gpt-4.1-mini";
 
+var endpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not set.");
+var deploymentName = Environment.GetEnvironmentVariable("FOUNDRY_MODEL") ?? "gpt-4o-mini";
 
-var persistentAgentsClient = new PersistentAgentsClient(azure_foundry_endpoint, new AzureCliCredential());
-var mcpToolWithApproval = new HostedMcpServerTool(
-    serverName: "microsoft_learn",
-    serverAddress: "https://learn.microsoft.com/api/mcp")
-{
-    AllowedTools = ["microsoft_docs_search"],
-    ApprovalMode = HostedMcpServerToolApprovalMode.AlwaysRequire
-};
+// Get a client to create/retrieve server side agents with.
+// WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
+// In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
+// latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
+var aiProjectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
 
-// Create an agent based on Azure OpenAI Responses as the backend.
-AIAgent agentWithRequiredApproval = await persistentAgentsClient.CreateAIAgentAsync(
-    model: azure_foundry_model_id,
-    options: new()
-    {
-        Name = "MicrosoftLearnAgentWithApproval",
-        ChatOptions = new()
+// **** MCP Tool with Approval Required ****
+// *****************************************
+
+// Create an MCP tool definition that the agent can use.
+// In this case we require approval before the tool can be called.
+var mcpToolWithApproval = ResponseTool.CreateMcpTool(
+    serverLabel: "microsoft_learn",
+    serverUri: new Uri("https://learn.microsoft.com/api/mcp"),
+    allowedTools: new McpToolFilter() { ToolNames = { "microsoft_docs_search" } },
+    toolCallApprovalPolicy: new McpToolCallApprovalPolicy(GlobalMcpToolCallApprovalPolicy.AlwaysRequireApproval));
+
+// Create an agent with the MCP tool that requires approval.
+ProjectsAgentVersion agentVersionWithApproval = await aiProjectClient.AgentAdministrationClient.CreateAgentVersionAsync(
+    "MicrosoftLearnAgentWithApproval",
+    new ProjectsAgentVersionCreationOptions(
+        new DeclarativeAgentDefinition(model: deploymentName)
         {
             Instructions = "You answer questions by searching the Microsoft Learn content only.",
-            Tools = [mcpToolWithApproval]
-        },
-    });
+            Tools = { mcpToolWithApproval }
+        }));
+
+AIAgent agentWithRequiredApproval = aiProjectClient.AsAIAgent(agentVersionWithApproval);
 
 // You can then invoke the agent like any other AIAgent.
-// var threadWithRequiredApproval = await agentWithRequiredApproval.GetNewThreadAsync();
+// For simplicity, we are assuming here that only mcp tool approvals are pending.
 AgentSession sessionWithRequiredApproval = await agentWithRequiredApproval.CreateSessionAsync();
 AgentResponse response = await agentWithRequiredApproval.RunAsync("Please summarize the Azure AI Agent documentation related to MCP Tool calling?", sessionWithRequiredApproval);
-List<McpServerToolApprovalRequestContent> approvalRequests = response.Messages.SelectMany(m => m.Contents).OfType<McpServerToolApprovalRequestContent>().ToList();
+List<ToolApprovalRequestContent> approvalRequests = response.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().ToList();
 
 while (approvalRequests.Count > 0)
 {
@@ -50,11 +56,12 @@ while (approvalRequests.Count > 0)
     List<ChatMessage> userInputResponses = approvalRequests
         .ConvertAll(approvalRequest =>
         {
+            McpServerToolCallContent mcpToolCall = (McpServerToolCallContent)approvalRequest.ToolCall!;
             Console.WriteLine($"""
                 The agent would like to invoke the following MCP Tool, please reply Y to approve.
-                ServerName: {approvalRequest.ToolCall.ServerName}
-                Name: {approvalRequest.ToolCall.ToolName}
-                Arguments: {string.Join(", ", approvalRequest.ToolCall.Arguments?.Select(x => $"{x.Key}: {x.Value}") ?? [])}
+                ServerName: {mcpToolCall.ServerName}
+                Name: {mcpToolCall.Name}
+                Arguments: {string.Join(", ", mcpToolCall.Arguments?.Select(x => $"{x.Key}: {x.Value}") ?? [])}
                 """);
             return new ChatMessage(ChatRole.User, [approvalRequest.CreateResponse(Console.ReadLine()?.Equals("Y", StringComparison.OrdinalIgnoreCase) ?? false)]);
         });
@@ -62,7 +69,7 @@ while (approvalRequests.Count > 0)
     // Pass the user input responses back to the agent for further processing.
     response = await agentWithRequiredApproval.RunAsync(userInputResponses, sessionWithRequiredApproval);
 
-    approvalRequests = response.Messages.SelectMany(m => m.Contents).OfType<McpServerToolApprovalRequestContent>().ToList();
+    approvalRequests = response.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().ToList();
 }
 
 Console.WriteLine($"\nAgent: {response}");
