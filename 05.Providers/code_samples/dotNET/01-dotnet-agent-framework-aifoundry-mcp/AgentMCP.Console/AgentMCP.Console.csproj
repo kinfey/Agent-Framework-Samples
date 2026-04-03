@@ -21,9 +21,9 @@
 
 
   <ItemGroup>
-    <ProjectReference Include="/Users/lokinfey/Desktop/AOAI/Foundry/agent-framework/dotnet/src/Microsoft.Agents.AI.AzureAI.Persistent/Microsoft.Agents.AI.AzureAI.Persistent.csproj" />
-    <ProjectReference Include="/Users/lokinfey/Desktop/AOAI/Foundry/agent-framework/dotnet/src/Microsoft.Agents.AI.Foundry/Microsoft.Agents.AI.Foundry.csproj" />
-    <ProjectReference Include="/Users/lokinfey/Desktop/AOAI/Foundry/agent-framework/dotnet/src/Microsoft.Agents.AI/Microsoft.Agents.AI.csproj" />
+    <ProjectReference Include="Your_Microsoft.Agents.AI.AzureAI.Persistent_Project_Path" />
+    <ProjectReference Include="Your_Microsoft.Agents.AI.Foundry_Project_Path" />
+    <ProjectReference Include="Your_Microsoft.Agents.AI_Project_Path" />
   </ItemGroup>
 
 </Project>
