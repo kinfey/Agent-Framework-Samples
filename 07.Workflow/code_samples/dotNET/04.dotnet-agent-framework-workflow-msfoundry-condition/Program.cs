@@ -7,21 +7,16 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.Identity;
 using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI.Workflows;
-using OpenAI.Assistants;
-using OpenAI.Responses;
 using DotNetEnv;
-using Azure.AI.Agents.Persistent;
 
 // Load environment variables
 Env.Load("../../../../.env");
 
-var azure_foundry_endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
-var azure_foundry_model_id = "gpt-4.1-mini";
-var bing_conn_id = Environment.GetEnvironmentVariable("BING_CONNECTION_ID") ?? throw new InvalidOperationException("BING_CONNECTION_ID is not set.");
+var endpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not set.");
+var deploymentName = Environment.GetEnvironmentVariable("FOUNDRY_MODEL") ?? "gpt-4o-mini";
 
 // Agent instructions
 const string EvangelistInstructions = @"
@@ -67,136 +62,32 @@ https://github.com/microsoft/agent-framework/tree/main/docs/docs-templates
 ";
 
 
+// WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
+// In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
+// latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
 AIProjectClient aiProjectClient = new(
-    new Uri(azure_foundry_endpoint),
-    new AzureCliCredential());
+    new Uri(endpoint),
+    new DefaultAzureCredential());
 
-
-
-var connectionName = Environment.GetEnvironmentVariable("BING_CONNECTION_NAME");
-
-Console.WriteLine($"Using Bing Connection: {connectionName}");
-
-AIProjectConnection bingConnectionName = aiProjectClient.Connections.GetConnection(connectionName: connectionName);
-
-
-
-// Console.WriteLine($"Using Bing Connection ID: {bing_conn_id}");
-
-// Configure Bing Grounding Tool
-BingGroundingAgentTool bingGroundingAgentTool = new(new BingGroundingSearchToolOptions(
-    searchConfigurations: [new Azure.AI.Projects.OpenAI.BingGroundingSearchConfiguration(projectConnectionId: bingConnectionName.Id)]
-    )
-);
-
-
-AIAgent evangelistagent = await aiProjectClient.CreateAIAgentAsync(
+// Create evangelist agent with web search tool (using direct AsAIAgent overload)
+AIAgent evangelistagent = aiProjectClient.AsAIAgent(
+    model: deploymentName,
+    instructions: EvangelistInstructions,
     name: "dotNETEvangelist",
-    creationOptions: new AgentVersionCreationOptions(
-        new PromptAgentDefinition(model: azure_foundry_model_id)
-        {
-            Instructions = EvangelistInstructions,
-            Tools = {
-                    bingGroundingAgentTool,
-            }
-        })
-);
+    tools: new AITool[] { new HostedWebSearchTool() });
 
-// var conttent_ResponseFormat = ChatResponseFormat.ForJsonSchema(AIJsonUtilities.CreateJsonSchema(typeof(ContentResult)), "ContentResult", "Content Result with DraftContent");
+// Create content reviewer agent (no tools needed)
+AIAgent contentRevieweragent = aiProjectClient.AsAIAgent(
+    model: deploymentName,
+    instructions: ContentReviewerInstructions,
+    name: "dotNETContentReviewer");
 
-// var content_option = new ChatOptions{
-//     ResponseFormat = conttent_ResponseFormat
-// };
-
-AIAgent contentRevieweragent = await aiProjectClient.CreateAIAgentAsync(
-    name: "dotNETContentReviewer",
-    creationOptions: new AgentVersionCreationOptions(
-        new PromptAgentDefinition(model: azure_foundry_model_id)
-        {
-            Instructions = ContentReviewerInstructions,
-        })
-
-);
-
-AIAgent publisheragent = await aiProjectClient.CreateAIAgentAsync(
+// Create publisher agent with code interpreter tool (using direct AsAIAgent overload)
+AIAgent publisheragent = aiProjectClient.AsAIAgent(
+    model: deploymentName,
+    instructions: PublisherInstructions,
     name: "dotNETPublisher",
-    creationOptions: new AgentVersionCreationOptions(
-        new PromptAgentDefinition(model: azure_foundry_model_id)
-        {
-            Instructions = PublisherInstructions,
-            Tools = {
-                ResponseTool.CreateCodeInterpreterTool(
-                    new CodeInterpreterToolContainer(
-                        CodeInterpreterToolContainerConfiguration.CreateAutomaticContainerConfiguration(fileIds: [])
-                    )
-                ),
-            },
-        })
-);
-
-
-
-// Create the three specialized agents
-// var evangelistMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
-//     model: azure_foundry_model_id,
-//     name: "dotNETEvangelist",
-//     instructions: EvangelistInstructions,
-//     tools: [bingGroundingTool]
-// );
-
-// var contentReviewerMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
-//     model: azure_foundry_model_id,
-//     name: "dotNETContentReviewer",
-//     instructions: ContentReviewerInstructions
-// );
-
-// var publisherMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
-//     model: azure_foundry_model_id,
-//     name: "dotNETPublisher",
-//     instructions: PublisherInstructions,
-//     tools: [new CodeInterpreterToolDefinition()]
-// );
-
-
-// AIAgent publisheragent = await agentsClient.GetAIAgentAsync(publisher_agentId);
-
-// Create the three specialized agents
-// var evangelistMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
-//     model: azure_foundry_model_id,
-//     name: "Evangelist",
-//     instructions: EvangelistInstructions,
-//     tools: [bingGroundingTool]
-// );
-
-// var contentReviewerMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
-//     model: azure_foundry_model_id,
-//     name: "ContentReviewer",
-//     instructions: ContentReviewerInstructions
-// );
-
-// var publisherMetadata = await persistentAgentsClient.Administration.CreateAgentAsync(
-//     model: azure_foundry_model_id,
-//     name: "Publisher",
-//     instructions: PublisherInstructions,
-//     tools: [new CodeInterpreterToolDefinition()]
-// );
-
-// string evangelist_agentId = evangelistMetadata.Value.Id;
-// string contentReviewer_agentId = contentReviewerMetadata.Value.Id;
-// string publisher_agentId = publisherMetadata.Value.Id;
-
-// // Get AI Agents
-// AIAgent evangelistagent = await persistentAgentsClient.GetAIAgentAsync(evangelist_agentId, new()
-// {
-//     // ResponseFormat = ChatResponseFormat.ForJsonSchema(AIJsonUtilities.CreateJsonSchema(typeof(ContentResult)), "ContentResult", "Content Result with DraftContent"),
-// });
-
-// AIAgent contentRevieweragent = await persistentAgentsClient.GetAIAgentAsync(contentReviewer_agentId, new()
-// {
-//     ResponseFormat = ChatResponseFormat.ForJsonSchema(AIJsonUtilities.CreateJsonSchema(typeof(ReviewResult)), "ReviewResult", "Review Result From DraftContent")
-// });
-
-// AIAgent publisheragent = await persistentAgentsClient.GetAIAgentAsync(publisher_agentId);
+    tools: new AITool[] { new HostedCodeInterpreterTool() { Inputs = [] } });
 
 // Create executors
 var draftExecutor = new DraftExecutor(evangelistagent);
@@ -274,6 +165,7 @@ public class ReviewResult
 }
 
 // Executor: Draft Creation
+[SendsMessage(typeof(ContentResult))]
 public partial class DraftExecutor : Executor
 {
     private readonly AIAgent _evangelistAgent;
@@ -299,6 +191,7 @@ public partial class DraftExecutor : Executor
 }
 
 // Executor: Content Review
+[SendsMessage(typeof(ReviewResult))]
 public partial class ContentReviewExecutor : Executor
 {
     private readonly AIAgent _contentReviewerAgent;
@@ -322,6 +215,7 @@ public partial class ContentReviewExecutor : Executor
 }
 
 // Executor: Publishing
+[YieldsOutput(typeof(string))]
 public partial class PublishExecutor : Executor
 {
     private readonly AIAgent _publishAgent;
@@ -342,6 +236,7 @@ public partial class PublishExecutor : Executor
 }
 
 // Executor: Send Review Notification
+[YieldsOutput(typeof(string))]
 public partial class SendReviewExecutor : Executor
 {
     public SendReviewExecutor() : base("SendReviewExecutor")

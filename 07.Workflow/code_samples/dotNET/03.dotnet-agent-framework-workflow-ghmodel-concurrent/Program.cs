@@ -57,17 +57,26 @@ var workflow = new WorkflowBuilder(startExecutor)
 await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, input: "Plan a trip to Seattle in December");
 
 string messageData = "";
+int eventCount = 0;
 await foreach (WorkflowEvent evt in run.WatchStreamAsync())
 {
+    eventCount++;
+    Console.WriteLine($"[Event {eventCount}] Type: {evt.GetType().Name}");
+    
     if (evt is WorkflowOutputEvent output)
     {
         messageData = output.Data?.ToString() ?? "";
         Console.WriteLine($"Workflow completed with results:\n{output.Data}");
     }
+    else
+    {
+        Console.WriteLine($"  Event details: {evt}");
+    }
 }
 
+Console.WriteLine($"\n=== Total Events Received: {eventCount} ===");
 Console.WriteLine("\n=== Final Output ===");
-Console.WriteLine(messageData);
+Console.WriteLine(string.IsNullOrEmpty(messageData) ? "(No output data)" : messageData);
 
 // Mermaid
 Console.WriteLine("\nMermaid string: \n=======");
@@ -86,6 +95,8 @@ Console.WriteLine("                   dot -Tpng workflow.dot -o workflow.png");
 /// <summary>
 /// Executor that starts the concurrent processing by broadcasting messages to all agents.
 /// </summary>
+[SendsMessage(typeof(ChatMessage))]
+[SendsMessage(typeof(TurnToken))]
 internal sealed partial class ConcurrentStartExecutor() :
     Executor("ConcurrentStartExecutor")
 {
@@ -103,19 +114,27 @@ internal sealed partial class ConcurrentStartExecutor() :
 /// <summary>
 /// Executor that aggregates the results from the concurrent agents.
 /// </summary>
-internal sealed class ConcurrentAggregationExecutor() :
+[YieldsOutput(typeof(string))]
+internal sealed partial class ConcurrentAggregationExecutor() :
     Executor<List<ChatMessage>>("ConcurrentAggregationExecutor")
 {
     private readonly List<ChatMessage> _messages = [];
 
     public override async ValueTask HandleAsync(List<ChatMessage> message, IWorkflowContext context, CancellationToken cancellationToken = default)
     {
+        Console.WriteLine($"[ConcurrentAggregationExecutor] Received {message.Count} messages");
         this._messages.AddRange(message);
+        Console.WriteLine($"[ConcurrentAggregationExecutor] Total messages collected: {this._messages.Count}");
 
-        if (this._messages.Count == 2)
+        if (this._messages.Count >= 2)
         {
             var formattedMessages = string.Join(Environment.NewLine, this._messages.Select(m => $"{m.AuthorName}: {m.Text}"));
+            Console.WriteLine($"[ConcurrentAggregationExecutor] Yielding output with {this._messages.Count} messages");
             await context.YieldOutputAsync(formattedMessages, cancellationToken);
+        }
+        else
+        {
+            Console.WriteLine($"[ConcurrentAggregationExecutor] Waiting for more messages (need 2, have {this._messages.Count})");
         }
     }
 }
