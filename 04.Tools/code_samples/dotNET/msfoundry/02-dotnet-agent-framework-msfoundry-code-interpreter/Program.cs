@@ -1,47 +1,31 @@
-﻿using System;
-using System.Linq;
-using System.IO;
-using System.Text;
+﻿using System.Text;
 using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using OpenAI.Assistants;
-using OpenAI.Responses;
 using DotNetEnv;
 
-
- Env.Load("../../../../../.env");
-
-
-var azure_foundry_endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
-var azure_foundry_model_id = "gpt-4.1-mini";
+Env.Load("../../../../../.env");
 
 const string AgentName = "Code-Agent-Framework";
 const string AgentInstructions = "You are an AI assistant that helps people find information.";
 
-AIProjectClient aiProjectClient = new(
-    new Uri(azure_foundry_endpoint),
-    new AzureCliCredential());
+string endpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not set.");
+string deploymentName = Environment.GetEnvironmentVariable("FOUNDRY_MODEL") ?? "gpt-4o-mini";
 
-AIAgent codingAgent = await aiProjectClient.CreateAIAgentAsync(
+// WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
+// In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
+// latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
+AIProjectClient aiProjectClient = new(new Uri(endpoint), new DefaultAzureCredential());
+
+AIAgent agent = aiProjectClient.AsAIAgent(
+    deploymentName,
+    instructions: AgentInstructions,
     name: AgentName,
-    creationOptions: new AgentVersionCreationOptions(
-        new PromptAgentDefinition(model: azure_foundry_model_id)
-        {
-            Instructions = AgentInstructions,
-            Tools = {
-                ResponseTool.CreateCodeInterpreterTool(
-                    new CodeInterpreterToolContainer(
-                        CodeInterpreterToolContainerConfiguration.CreateAutomaticContainerConfiguration(fileIds: [])
-                    )
-                ),
-            }
-        })
-);
+    tools: [new HostedCodeInterpreterTool() { Inputs = [] }]);
 
-AgentResponse response = await codingAgent.RunAsync("Use code to determine the values in the Fibonacci sequence that that are less then the value of 101?");
+AgentResponse response = await agent.RunAsync("Use code to determine the values in the Fibonacci sequence that that are less then the value of 101?");
 
 // Get the CodeInterpreterToolCallContent
 CodeInterpreterToolCallContent? toolCallContent = response.Messages.SelectMany(m => m.Contents).OfType<CodeInterpreterToolCallContent>().FirstOrDefault();
@@ -73,10 +57,4 @@ foreach (AIAnnotation annotation in response.Messages.SelectMany(m => m.Contents
             """);
     }
 }
-
-
-// AgentThread thread = await agent.GetNewThreadAsync();
-
-
-// Console.WriteLine(await agent.RunAsync(userMessage, thread));
 

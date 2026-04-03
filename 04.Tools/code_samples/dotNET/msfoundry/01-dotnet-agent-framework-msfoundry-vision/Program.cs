@@ -1,55 +1,41 @@
 ﻿using System;
-using System.Linq;
-using System.IO;
 using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
 using Azure.Identity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
- using DotNetEnv;
+using DotNetEnv;
 
- Env.Load("../../../../../.env");
+Env.Load("../../../../../.env");
 
 
-var azure_foundry_endpoint = Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("AZURE_AI_PROJECT_ENDPOINT is not set.");
-var azure_foundry_model_id = "gpt-4o";
+var endpoint = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT") ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT is not set.");
+var deploymentName = Environment.GetEnvironmentVariable("FOUNDRY_MODEL") ?? "gpt-4o-mini";
 
-var imgPath ="../../../files/home.png";
+var imgPath = "../../../files/home.png";
 
 const string AgentName = "Vision-Agent";
 const string AgentInstructions = "You are my furniture sales consultant, you can find different furniture elements from the pictures and give me a purchase suggestion";
 
+// WARNING: DefaultAzureCredential is convenient for development but requires careful consideration in production.
+// In production, consider using a specific credential (e.g., ManagedIdentityCredential) to avoid
+// latency issues, unintended credential probing, and potential security risks from fallback mechanisms.
+AIProjectClient aiProjectClient = new(new Uri(endpoint), new DefaultAzureCredential());
 
-async Task<byte[]> OpenImageBytesAsync(string path)
-{
-	return await File.ReadAllBytesAsync(path);
-}
+AIAgent agent = aiProjectClient.AsAIAgent(
+    deploymentName,
+    instructions: AgentInstructions,
+    name: AgentName);
 
-var imageBytes = await OpenImageBytesAsync(imgPath);
-
-AIProjectClient aiProjectClient = new(
-    new Uri(azure_foundry_endpoint),
-    new AzureCliCredential());
-
-
-AIAgent agent = await aiProjectClient.CreateAIAgentAsync(
-    name: AgentName,
-    creationOptions: new AgentVersionCreationOptions(
-        new PromptAgentDefinition(model: azure_foundry_model_id)
-        {
-            Instructions = AgentInstructions
-        })
-);
-
-
-ChatMessage userMessage = new ChatMessage(ChatRole.User, [
-	new TextContent("Can you identify the furniture items in this image and suggest which ones would fit well in a modern living room?"), new DataContent(imageBytes, "image/png")
+ChatMessage message = new(ChatRole.User, [
+    new TextContent("Can you identify the furniture items in this image and suggest which ones would fit well in a modern living room?"),
+    await DataContent.LoadFromAsync(imgPath),
 ]);
-
-
 
 AgentSession session = await agent.CreateSessionAsync();
 
-
-Console.WriteLine(await agent.RunAsync(userMessage, session));
+await foreach (AgentResponseUpdate update in agent.RunStreamingAsync(message, session))
+{
+    Console.Write(update);
+}
+Console.WriteLine();
 
