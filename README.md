@@ -37,7 +37,7 @@ This repository provides step-by-step tutorials and real-world examples covering
 
 > 📌 **Additional Notes**: 
 > 1. The examples in this repository are primarily based on **GitHub Models** and **Microsoft Foundry**. You can access GitHub Models directly at https://gh.io/models
-> 2. **Microsoft Foundry Agent Service** uses the **V2 version**. Please access it at https://ai.azure.com and select **V2** when creating or managing your Microsoft Foundry projects.
+> 2. **Microsoft Foundry Agent Service** uses the **V2 version**. V2 is GA now 
 
 ### Option 1: Install Released Version
 
