@@ -1,0 +1,22 @@
+# ── Microsoft Agent Framework (Foundry backend) ───────────────────────────────
+# agent-framework>=1.0.1            # Agent, Skill, WorkflowBuilder, middleware, sessions
+# agent-framework-foundry>=1.0.1    # FoundryChatClient, FoundryAgent, FoundryMemoryProvider
+
+# ── Azure identity & Foundry SDK ──────────────────────────────────────────────
+azure-identity>=1.17.0            # DefaultAzureCredential, AzureCliCredential, ManagedIdentity
+azure-ai-projects>=1.0.0          # AIProjectClient (used internally by FoundryChatClient)
+
+# ── Azure Functions hosting ───────────────────────────────────────────────────
+azure-functions>=1.21.0
+
+# ── Local dev server ──────────────────────────────────────────────────────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# ── Observability ─────────────────────────────────────────────────────────────
+opentelemetry-sdk>=1.25.0
+opentelemetry-exporter-otlp>=1.25.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+pydantic>=2.7.0
