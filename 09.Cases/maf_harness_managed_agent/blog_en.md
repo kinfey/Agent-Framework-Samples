@@ -1,4 +1,4 @@
-# Implementing Cloud-Native Anthropic Managed Agent Architecture with Microsoft Agent Framework and Azure
+# Implementing Cloud-Native Anthropic Managed Agent Architecture with Microsoft Agent Framework and Microsoft Azure
 
 > Anthropic proposed a core thesis in [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents): **the reliability of an Agent system depends on the degree of decoupling between components, not on the complexity of any single component**. This article implements that architectural theory end-to-end on the **Microsoft Agent Framework (MAF) + Microsoft Foundry** stack, validating every design decision with runnable code.
 

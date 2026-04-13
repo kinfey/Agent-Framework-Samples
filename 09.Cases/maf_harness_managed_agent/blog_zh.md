@@ -1,4 +1,4 @@
-# 基于 Microsoft Agent Framework 与 Azure 实现云原生的 Anthropic Managed Agent 架构
+# 基于 Microsoft Agent Framework 与 Microsoft Azure 实现云原生的 Anthropic Managed Agent 架构
 
 > Anthropic 在 [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents) 中提出了一个核心命题：**Agent 系统的可靠性取决于组件之间的解耦程度，而非单一组件的复杂度**。本文将这套架构理论完整落地到 **Microsoft Agent Framework（MAF）+ Microsoft Foundry** 技术栈上,并通过可运行的代码验证每一个设计决策。
 
