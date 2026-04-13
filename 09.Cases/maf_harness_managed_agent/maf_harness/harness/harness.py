@@ -97,7 +97,7 @@ class HarnessConfig:
     sandbox_timeout_sec: int       = 30
 
 
-# ── 沙箱工具包装器 ─────────────────────────────────────────────────────────
+# ── Sandbox Tool Wrappers ───────────────────────────────────────────────────────
 
 def build_sandbox_tools(
     sandbox_mgr: SandboxManager,
@@ -105,9 +105,9 @@ def build_sandbox_tools(
     session_id:  str,
 ) -> list[Callable]:
     """
-    将 sandbox.execute(name, input) 包装为带类型的 AF 工具函数。
-    沙箱在首次工具调用时延迟创建 — 仅需推理的会话
-    永远不会承担创建开销（TTFT 优化）。
+    Wraps sandbox.execute(name, input) as typed AF tool functions.
+    Sandboxes are lazily created on first tool call — reasoning-only sessions
+    never incur creation overhead (TTFT optimization).
     """
     _state: dict[str, str | None] = {"sandbox_id": None}
 
