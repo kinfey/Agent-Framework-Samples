@@ -912,5 +912,4 @@ session, events = await session_log.wake(session_id)       # 恢复状态
 
 ---
 
-*项目代码：[maf_harness_managed_agent](https://github.com/maf_harness_managed_agent)*
 *参考：[Anthropic — Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents) · [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) · [Azure AI Foundry](https://ai.azure.com)*

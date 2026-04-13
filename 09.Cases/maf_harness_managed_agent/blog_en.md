@@ -916,5 +916,4 @@ Stable interfaces, swappable implementations. Stateless brains, disposable hands
 
 ---
 
-*Project code: [maf_harness_managed_agent](https://github.com/maf_harness_managed_agent)*
 *References: [Anthropic — Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents) · [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) · [Azure AI Foundry](https://ai.azure.com)*
