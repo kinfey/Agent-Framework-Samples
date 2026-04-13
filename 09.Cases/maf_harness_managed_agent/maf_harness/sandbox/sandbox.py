@@ -1,16 +1,16 @@
 """
 maf_harness.sandbox.sandbox
 ============================
-沙箱是"双手" — 一个隔离的执行环境，编排器通过单一接口调用：
+Sandbox is the "hands" — an isolated execution environment that the harness calls via a single interface:
 
     execute(name, input) → string
     provision(resources) → sandbox_id
 
-来自 Anthropic 文章的关键设计决策：
-  - 沙箱是"可替换的"：如果一个挂了，编排器会创建一个新的。
-  - 凭据永远不进入沙箱；它们保存在 VaultStore 中。
-  - 沙箱按需创建（而非预先创建） — 这使 Anthropic 的
-    p50 TTFT 减少了约 60%，p95 减少了超过 90%。
+Key design decisions from the Anthropic article:
+  - Sandboxes are "cattle": if one dies, the harness creates a new one.
+  - Credentials never enter the sandbox; they are kept in VaultStore.
+  - Sandboxes are created on-demand (not pre-provisioned) — this reduced Anthropic's
+    p50 TTFT by ~60% and p95 by >90%.
 """
 
 from __future__ import annotations
@@ -22,12 +22,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 
-# ── 凭据保险库 ──────────────────────────────────────────────────────────────
+# ── Credential Vault ────────────────────────────────────────────────────────
 
 class VaultStore:
     """
-    安全凭据存储 — 令牌永远不进入沙箱。
-    生产环境中使用 Azure Key Vault 作为后端。
+    Secure credential storage — tokens never enter the sandbox.
+    Use Azure Key Vault as backend in production.
     """
 
     def __init__(self) -> None:
@@ -43,7 +43,7 @@ class VaultStore:
         self._vault.pop(key, None)
 
 
-# ── 沙箱资源规格 ─────────────────────────────────────────────────────────────
+# ── Sandbox Resource Spec ─────────────────────────────────────────────────────────
 
 @dataclass
 class SandboxResources:
@@ -54,10 +54,10 @@ class SandboxResources:
     allowed_tools: list[str]  = field(default_factory=list)
 
 
-# ── 工具注册表 ─────────────────────────────────────────────────────────────
+# ── Tool Registry ───────────────────────────────────────────────────────────
 
 class ToolRegistry:
-    """沙箱内可用的命名可调用工具的注册表。"""
+    """Registry of named callable tools available within the sandbox."""
 
     def __init__(self) -> None:
         self._tools: dict[str, Callable] = {}
@@ -72,12 +72,12 @@ class ToolRegistry:
         return list(self._tools.keys())
 
 
-# ── 沙箱实例 ──────────────────────────────────────────────────────────────
+# ── Sandbox Instance ────────────────────────────────────────────────────────
 
 class Sandbox:
     """
-    单个沙箱实例。除活跃标志外无状态。
-    标准接口：await sandbox.execute(name, input) → str
+    A single sandbox instance. Stateless except for alive flag.
+    Standard interface: await sandbox.execute(name, input) → str
     """
 
     def __init__(
@@ -100,8 +100,8 @@ class Sandbox:
 
     async def execute(self, name: str, input_data: str) -> str:
         """
-        execute(name, input) → string — 大脑↔双手的唯一接口。
-        编排器不关心 'name' 映射到容器、子进程还是其他执行后端。
+        execute(name, input) → string — the sole interface between brain ↔ hands.
+        The orchestrator doesn't care whether 'name' maps to a container, subprocess, or other execution backend.
         """
         if not self._alive:
             raise RuntimeError(f"Sandbox {self.sandbox_id} is dead.")
@@ -132,19 +132,19 @@ class Sandbox:
             return f"[TOOL ERROR] {name}: {exc}"
 
     def kill(self) -> None:
-        """将沙箱标记为已终止 — 编排器将创建一个替代品。"""
+        """Mark the sandbox as terminated — the orchestrator will create a replacement."""
         self._alive = False
 
 
-# ── 沙箱管理器 ───────────────────────────────────────────────────────────────
+# ── Sandbox Manager ───────────────────────────────────────────────────────────────
 
 class SandboxManager:
     """
-    创建和跟踪沙箱实例。
+    Creates and tracks sandbox instances.
 
-    对应 Anthropic 的 provision({resources}) → sandbox_id 模式。
-    沙箱仅在编排器实际需要执行时才创建；
-    纯推理的会话永远不会承担创建开销。
+    Corresponds to Anthropic's provision({resources}) → sandbox_id pattern.
+    Sandboxes are created only when the orchestrator actually needs execution;
+    purely inferential sessions never incur creation overhead.
     """
 
     def __init__(self, vault: VaultStore) -> None:
@@ -153,12 +153,12 @@ class SandboxManager:
         self._sandboxes: dict[str, Sandbox] = {}
         self._register_builtin_tools()
 
-    # ── 内置工具注册 ────────────────────────────────────────────────────────
+    # ── Built-in Tool Registration ────────────────────────────────────────────
 
     def _register_builtin_tools(self) -> None:
 
         async def run_python(code: str, **_) -> str:
-            """在隔离的子进程中执行 Python 代码片段。"""
+            """Execute Python code snippet in an isolated subprocess."""
             try:
                 proc = await asyncio.create_subprocess_exec(
                     "python3", "-c", code,
@@ -173,7 +173,7 @@ class SandboxManager:
                 return f"[EXEC ERROR] {e}"
 
         async def web_search(query: str, **_) -> str:
-            """模拟网络搜索（生产环境替换为 Bing / Azure AI Search）。"""
+            """Mock web search (replace with Bing / Azure AI Search in production)."""
             return (
                 f"[SEARCH: '{query}']\n"
                 f"1. Result A — overview of '{query}'\n"
@@ -189,7 +189,7 @@ class SandboxManager:
                 return f"[FILE ERROR] {e}"
 
         async def write_file(payload: str, **_) -> str:
-            """负载格式: 'path::content'"""
+            """Payload format: 'path::content'"""
             if "::" not in payload:
                 return "[FILE ERROR] payload must be 'path::content'"
             path, content = payload.split("::", 1)
@@ -206,15 +206,15 @@ class SandboxManager:
         self._registry.register("write_file", write_file)
 
     def register_tool(self, name: str, fn: Callable) -> None:
-        """在运行时注册自定义工具。"""
+        """Register custom tools at runtime."""
         self._registry.register(name, fn)
 
-    # ── 创建 / 执行 / 回收 ─────────────────────────────────────────────────
+    # ── Create / Execute / Reclaim ─────────────────────────────────────────────
 
     async def provision(self, resources: SandboxResources | None = None) -> str:
         """
-        创建新沙箱。等价于 provision({resources})。
-        由编排器延迟调用 — 仅在实际需要工具时才调用。
+        Create a new sandbox. Equivalent to provision({resources}).
+        Called lazily by the orchestrator — only when tools are actually needed.
         """
         resources  = resources or SandboxResources()
         sandbox_id = str(uuid.uuid4())
@@ -230,7 +230,7 @@ class SandboxManager:
         return self._sandboxes.get(sandbox_id)
 
     async def execute(self, sandbox_id: str, name: str, input_data: str) -> str:
-        """将 execute(name, input) → string 路由到指定沙箱。"""
+        """Route execute(name, input) → string to the specified sandbox."""
         sandbox = self.get(sandbox_id)
         if sandbox is None or not sandbox.alive:
             raise RuntimeError(
@@ -239,7 +239,7 @@ class SandboxManager:
         return await sandbox.execute(name, input_data)
 
     def reclaim(self, sandbox_id: str) -> None:
-        """终止并丢弃沙箱（可替换模式）。"""
+        """Terminate and discard sandbox (replaceable pattern)."""
         if sandbox_id in self._sandboxes:
             self._sandboxes[sandbox_id].kill()
             del self._sandboxes[sandbox_id]

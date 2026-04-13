@@ -36,7 +36,7 @@ from maf_harness.sandbox.sandbox    import SandboxManager, VaultStore
 from maf_harness.session.session_log import EventKind, SessionLog
 
 
-# ── 共享基础设施 ─────────────────────────────────────────────────────────────
+# ── Shared Infrastructure ──────────────────────────────────────────────────
 
 vault       = VaultStore()
 session_log = SessionLog()
@@ -55,7 +55,7 @@ def _harness(name: str = "ManagedAgent") -> AgentHarness:
     )
 
 
-# ── 辅助函数 ─────────────────────────────────────────────────────────────────
+# ── Helper Functions ───────────────────────────────────────────────────────
 
 def _banner(title: str, subtitle: str = "") -> None:
     print(f"\n{'═' * 68}\n{title}")
@@ -77,11 +77,11 @@ async def _event_breakdown(session_id: str) -> None:
     print(f"[SESSION {session_id[:8]}] events → {kinds}")
 
 
-# ── 演示 1：单轮会话 ─────────────────────────────────────────────────────────
+# ── Demo 1: Single Turn Session ───────────────────────────────────────────
 
 async def demo_single_turn() -> None:
     _banner(
-        "演示 1 — 单轮会话",
+        "Demo 1 — Single Turn Session",
         "create_session → start → run → shutdown",
     )
     task = "What is 6 × 7? Verify by running Python code."
@@ -97,12 +97,12 @@ async def demo_single_turn() -> None:
     await _event_breakdown(sid)
 
 
-# ── 演示 2：多轮对话 ─────────────────────────────────────────────────────────
+# ── Demo 2: Multi-Turn Conversation ───────────────────────────────────────
 
 async def demo_multi_turn() -> None:
     _banner(
-        "演示 2 — 多轮对话",
-        "同一个 session_id 跨多次 run() 调用复用",
+        "Demo 2 — Multi-Turn Conversation",
+        "Reuse the same session_id across multiple run() calls",
     )
     sid = await session_log.create_session("Multi-turn Foundry session")
     print(f"\n[SESSION] {sid[:12]}…")
@@ -123,12 +123,12 @@ async def demo_multi_turn() -> None:
     await _event_breakdown(sid)
 
 
-# ── 演示 3：编排器崩溃 + wake 恢复 ───────────────────────────────────────────
+# ── Demo 3: Harness Crash + Wake Recovery ─────────────────────────────────
 
 async def demo_harness_recovery() -> None:
     _banner(
-        "演示 3 — 编排器崩溃恢复（wake 模式）",
-        "编排器 #1 崩溃 → 编排器 #2 从持久化会话日志中恢复",
+        "Demo 3 — Harness Crash Recovery (wake mode)",
+        "Harness #1 crashes → Harness #2 recovers from durable session log",
     )
     sid = await session_log.create_session("Crash recovery demo")
     print(f"\n[SESSION] {sid[:12]}…")
@@ -137,32 +137,32 @@ async def demo_harness_recovery() -> None:
     await h1.start(sid)
     r1 = await h1.run("List three benefits of async programming in Python.")
     print(f"\n[H1] {_clip(r1, 200)}")
-    print(f"\n[H1] 💥  模拟崩溃 — 编排器未经 shutdown 直接丢弃…")
+    print(f"\n[H1] 💥  Simulating crash — harness discarded without shutdown…")
     del h1
 
     n_before = await session_log.event_count(sid)
-    print(f"[LOG] 崩溃后仍保留 {n_before} 条事件 ✓")
+    print(f"[LOG] {n_before} events still preserved after crash ✓")
 
-    print("\n[H2] wake(session_id) → 从持久化日志恢复…")
+    print("\n[H2] wake(session_id) → recovering from durable log…")
     h2 = _harness("Harness-2")
     await h2.start(sid)       # internally calls SessionLog.wake()
     r2 = await h2.run(
         "Give a short Python async/await example based on what you found."
     )
-    print(f"\n[H2] 无缝继续: {_clip(r2, 280)}")
+    print(f"\n[H2] Seamless continuation: {_clip(r2, 280)}")
     await h2.shutdown()
 
     n_after = await session_log.event_count(sid)
-    print(f"\n[LOG] 最终: {n_after} 条事件（恢复后增加 {n_after - n_before} 条）")
+    print(f"\n[LOG] Final: {n_after} events ({n_after - n_before} added after recovery)")
     await _event_breakdown(sid)
 
 
-# ── 演示 4：流式输出 ─────────────────────────────────────────────────────────
+# ── Demo 4: Streaming Output ──────────────────────────────────────────────
 
 async def demo_streaming() -> None:
     _banner(
-        "演示 4 — 流式响应",
-        "run_streaming() 在 token 从 Foundry 到达时逐步返回",
+        "Demo 4 — Streaming Response",
+        "run_streaming() returns tokens incrementally as they arrive from Foundry",
     )
     sid = await session_log.create_session("Streaming demo")
     h   = _harness("StreamAgent")
@@ -181,12 +181,12 @@ async def demo_streaming() -> None:
     await h.shutdown()
 
 
-# ── 演示 5：多大脑、多双手 ───────────────────────────────────────────────────
+# ── Demo 5: Many Brains, Many Hands ───────────────────────────────────────
 
 async def demo_many_brains() -> None:
     _banner(
-        "演示 5 — 多大脑 × 多双手",
-        "N 个无状态 Foundry 编排器并发运行；沙箱按需创建",
+        "Demo 5 — Many Brains × Many Hands",
+        "N stateless Foundry harnesses run concurrently; sandboxes created on demand",
     )
     tasks = [
         "What is the capital of Japan? One sentence only.",
@@ -194,7 +194,7 @@ async def demo_many_brains() -> None:
         "Give one fun fact about Microsoft Foundry.",
     ]
 
-    print(f"\n[ORCHESTRATOR] 启动 {len(tasks)} 个并行 Foundry 大脑…")
+    print(f"\n[ORCHESTRATOR] Launching {len(tasks)} parallel Foundry brains…")
     results = await run_many_brains(tasks, session_log, sandbox_mgr)
 
     for r in results:
@@ -208,12 +208,12 @@ async def demo_many_brains() -> None:
     print(f"\n[METRICS] {GLOBAL_METRICS.summary()}")
 
 
-# ── 演示 6：会话日志检查 ─────────────────────────────────────────────────────
+# ── Demo 6: Session Log Inspection ────────────────────────────────────────
 
 async def demo_session_log() -> None:
     _banner(
-        "演示 6 — 会话日志检查",
-        "getEvents() 切片用于上下文窗口管理",
+        "Demo 6 — Session Log Inspection",
+        "getEvents() slicing for context window management",
     )
     sid = await session_log.create_session("Log inspection demo")
     h   = _harness()
@@ -223,29 +223,29 @@ async def demo_session_log() -> None:
     await h.shutdown()
 
     all_events = await session_log.get_events(sid)
-    print(f"\n[LOG] 总事件数: {len(all_events)}")
+    print(f"\n[LOG] Total events: {len(all_events)}")
 
     recent = await session_log.get_context_window(sid, last_n=5)
-    print(f"\n[CONTEXT WINDOW] 最近 5 条事件:")
+    print(f"\n[CONTEXT WINDOW] Last 5 events:")
     for e in recent:
         print(f"  [{e.kind.value:22s}] {str(e.payload)[:80]}")
 
     responses = await session_log.get_events(
         sid, kind_filter=[EventKind.AGENT_RESPONSE]
     )
-    print(f"\n[FILTER] 代理响应: {len(responses)} 条")
+    print(f"\n[FILTER] Agent responses: {len(responses)} events")
 
     sliced = await session_log.get_events(sid, start=1, end=4)
     print(f"[SLICE 1:4] {len(sliced)} events: "
           + ", ".join(e.kind.value for e in sliced))
 
 
-# ── 演示 7：安全边界 ─────────────────────────────────────────────────────────
+# ── Demo 7: Security Boundary ─────────────────────────────────────────────
 
 async def demo_security() -> None:
     _banner(
-        "演示 7 — 安全边界",
-        "VaultStore 持有令牌；沙箱永远看不到凭据",
+        "Demo 7 — Security Boundary",
+        "VaultStore holds tokens; sandbox never sees credentials",
     )
     vault.store("foundry_key",   "FoundryKey-XXXX")
     vault.store("github_token",  "ghp_XXXXXXXX")
@@ -260,18 +260,18 @@ async def demo_security() -> None:
         "run_python",
         "import os; print(os.environ.get('FOUNDRY_API_KEY', 'NOT_VISIBLE'))",
     )
-    print(f"\n[SANDBOX] 从沙箱内部读取 FOUNDRY_API_KEY: {r1!r}  ✓")
+    print(f"\n[SANDBOX] Reading FOUNDRY_API_KEY from inside sandbox: {r1!r}  ✓")
 
-    r2 = await box.execute("shell", "cat /etc/secrets")  # 被阻止的工具
-    print(f"[SANDBOX] 被阻止的工具 'shell': {r2!r}  ✓")
+    r2 = await box.execute("shell", "cat /etc/secrets")  # Blocked tool
+    print(f"[SANDBOX] Blocked tool 'shell': {r2!r}  ✓")
 
     box.kill()
     sid2 = await sandbox_mgr.provision()
-    print(f"\n[SANDBOX] 旧沙箱已销毁（可替换模式）。新沙箱: {sid2[:12]}…  ✓")
+    print(f"\n[SANDBOX] Old sandbox destroyed (cattle mode). New sandbox: {sid2[:12]}…  ✓")
     sandbox_mgr.reclaim(sid2)
 
 
-# ── 入口 ─────────────────────────────────────────────────────────────────────
+# ── Entry Point ────────────────────────────────────────────────────────────
 
 DEMOS = {
     "single":   demo_single_turn,

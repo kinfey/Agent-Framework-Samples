@@ -1,18 +1,18 @@
 """
 maf_harness.hosting.azure_function_host
 ========================================
-将托管代理编排器托管为 Azure Functions HTTP 触发器。
-LLM 后端：Microsoft Foundry（FoundryChatClient）— 无 OpenAI 依赖。
+Host managed agent harness as Azure Functions HTTP triggers.
+LLM backend: Microsoft Foundry (FoundryChatClient) — zero OpenAI dependency.
 
-端点：
-    POST /sessions                   → 创建会话，返回 session_id
-    POST /sessions/{id}/run          → 执行一次代理轮次
-    GET  /sessions/{id}/events       → 查询会话事件日志
-    POST /sessions/{id}/wake         → 从会话日志中重新注入编排器
-    GET  /health                     → 端点与模型健康检查
+Endpoints:
+    POST /sessions                   → create session, return session_id
+    POST /sessions/{id}/run          → execute one agent turn
+    GET  /sessions/{id}/events       → query session event log
+    POST /sessions/{id}/wake         → rehydrate harness from session log
+    GET  /health                     → endpoint & model health check
 
-任何 Azure Functions 实例都可以服务任何会话 — 路由完全基于
-session_id。无需粘性会话。通过增加实例即可水平扩展。
+Any Azure Functions instance can serve any session — routing purely by
+session_id. No sticky sessions needed. Horizontally scale by adding instances.
 
 local.settings.json:
     {
@@ -24,7 +24,7 @@ local.settings.json:
       }
     }
 
-本地开发（FastAPI）：
+Local development (FastAPI):
     uvicorn maf_harness.hosting.azure_function_host:local_app --reload
 """
 
@@ -47,7 +47,7 @@ from maf_harness.sandbox.sandbox import SandboxManager, VaultStore
 from maf_harness.session.session_log import SessionLog
 
 
-# ── 单例基础设施（每个冷启动容器）───────────────────────────────────────────
+# ── Singleton Infrastructure (per cold-start container) ───────────────────────────
 
 _vault       = VaultStore()
 _session_log = SessionLog()
@@ -59,8 +59,8 @@ _config = HarnessConfig(
     max_iterations=int(os.getenv("MAX_ITERATIONS", "20")),
 )
 
-# 延迟构建，首次请求时创建 — 避免环境变量尚未注入时的冷启动失败
-# （如测试环境中模块导入阶段）。
+# Lazy build on first request — avoid cold-start failure when env vars not yet injected
+# (e.g., during module import in test environments).
 _foundry_client = None
 
 
@@ -71,7 +71,7 @@ def _get_client():
     return _foundry_client
 
 
-# ── 处理逻辑（Azure Functions 和 FastAPI 共用）────────────────────────────
+# ── Handler Logic (shared by Azure Functions and FastAPI) ────────────────────────────
 
 async def _handle_create_session(body: dict) -> dict:
     task       = body.get("task", "")
@@ -85,7 +85,7 @@ async def _handle_run_turn(session_id: str, body: dict) -> dict:
     if not user_input:
         return {"error": "Missing 'input' field."}
 
-    # 每次请求创建新的无状态编排器 — 从持久化会话日志中唤醒
+    # Create a new stateless harness per request — wakes from durable session log
     harness = AgentHarness(
         session_log=_session_log,
         sandbox_mgr=_sandbox_mgr,
@@ -126,7 +126,7 @@ async def _handle_wake(session_id: str) -> dict:
     }
 
 
-# ── Azure Functions HTTP 触发器 ─────────────────────────────────────────────
+# ── Azure Functions HTTP Triggers ─────────────────────────────────────────────
 
 if _AZURE:
     app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
@@ -171,16 +171,16 @@ if _AZURE:
         )
 
 
-# ── 本地 FastAPI 开发服务器 ──────────────────────────────────────────────────
+# ── Local FastAPI Development Server ──────────────────────────────────────────────
 
 def create_local_app():
     """
-    镜像 Azure Functions 路由，用于本地开发。
+    Mirror Azure Functions routes for local development.
 
-    用法：
+    Usage:
         uvicorn maf_harness.hosting.azure_function_host:local_app --reload
 
-    环境变量：
+    Environment variables:
         export FOUNDRY_PROJECT_ENDPOINT=https://...
         export FOUNDRY_MODEL=gpt-5.4
         az login

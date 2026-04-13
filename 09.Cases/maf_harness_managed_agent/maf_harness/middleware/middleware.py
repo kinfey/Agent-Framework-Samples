@@ -1,14 +1,14 @@
 """
 maf_harness.middleware.middleware
 ==================================
-AF @agent_middleware 中间件栈 — 拦截每次代理轮次的横切关注点，
-不修改代理逻辑。
+AF @agent_middleware middleware stack — intercepts cross-cutting concerns on every agent turn,
+without modifying agent logic.
 
-中间件栈（按顺序应用）：
-    1. SessionLoggingMiddleware  — 将每次轮次写入持久化会话日志
-    2. SecurityMiddleware        — 从上下文中清除凭据模式
-    3. RateLimitMiddleware       — 令牌桶限流器（RPM）
-    4. ObservabilityMiddleware   — TTFT 延迟 + 运行指标
+Middleware stack (applied in order):
+    1. SessionLoggingMiddleware  — write every turn to durable session log
+    2. SecurityMiddleware        — scrub credential patterns from context
+    3. RateLimitMiddleware       — token bucket rate limiter (RPM)
+    4. ObservabilityMiddleware   — TTFT latency + run metrics
 
 AF API: @agent_middleware, AgentContext
 """
@@ -24,10 +24,10 @@ if TYPE_CHECKING:
     from maf_harness.session.session_log import EventKind, SessionEvent, SessionLog
 
 
-# ── 1. 会话日志记录 ────────────────────────────────────────────────────────
+# ── 1. Session Logging ──────────────────────────────────────────────────────────
 
 def make_session_logging_middleware(session_log, session_id: str):
-    """将每次代理轮次作为结构化事件写入持久化会话日志。"""
+    """Write every agent turn as structured events to durable session log."""
 
     @agent_middleware
     async def _mw(ctx: AgentContext, next):
@@ -63,12 +63,12 @@ def make_session_logging_middleware(session_log, session_id: str):
     return _mw
 
 
-# ── 2. 安全 ───────────────────────────────────────────────────────────────
+# ── 2. Security ─────────────────────────────────────────────────────────────────
 
 def make_security_middleware(blocked_patterns: list[str] | None = None):
     """
-    强制安全边界：在凭据模式到达模型上下文之前将其清除。
-    凭据绝不能出现在沙箱中。
+    Enforce security boundary: scrub credential patterns before they reach model context.
+    Credentials never appear in sandbox.
     """
     _blocked = blocked_patterns or [
         "sk-", "Bearer ", "AZURE_", "password=", "secret=",
@@ -80,7 +80,7 @@ def make_security_middleware(blocked_patterns: list[str] | None = None):
         safe = []
         for msg in ctx.messages:
             if any(p in str(msg) for p in _blocked):
-                print(f"[SECURITY] 已从消息上下文中清除凭据模式。")
+                print(f"[SECURITY] Scrubbed credential patterns from message context.")
                 continue
             safe.append(msg)
         ctx.messages = safe
@@ -89,10 +89,10 @@ def make_security_middleware(blocked_patterns: list[str] | None = None):
     return _mw
 
 
-# ── 3. 限流 ──────────────────────────────────────────────────────────────
+# ── 3. Rate Limiting ────────────────────────────────────────────────────────────
 
 def make_rate_limit_middleware(max_rpm: int = 60):
-    """简单的滑动窗口限流器。"""
+    """Simple sliding window rate limiter."""
     from collections import deque
 
     window: deque[float] = deque()
@@ -112,10 +112,10 @@ def make_rate_limit_middleware(max_rpm: int = 60):
     return _mw
 
 
-# ── 4. 可观测性（TTFT 指标）──────────────────────────────────────────────
+# ── 4. Observability (TTFT Metrics) ───────────────────────────────────────────
 
 class Metrics:
-    """进程内指标 — 生产环境替换为 OpenTelemetry。"""
+    """In-process metrics — replace with OpenTelemetry in production."""
 
     def __init__(self) -> None:
         self.samples:      list[float] = []
@@ -155,9 +155,9 @@ GLOBAL_METRICS = Metrics()
 
 def make_observability_middleware(metrics: Metrics | None = None):
     """
-    测量每次代理运行的首 token 延迟（TTFT）。
-    Anthropic 通过将大脑与沙箱解耦，使 p50 TTFT 减少约 60%，p95 减少超过 90%。
-    此中间件为您的部署跟踪该数值。
+    Measure time-to-first-token (TTFT) latency on every agent run.
+    Anthropic reduced p50 TTFT by ~60% and p95 by >90% by decoupling brain from sandbox.
+    This middleware tracks that metric for your deployment.
     """
     m = metrics or GLOBAL_METRICS
 

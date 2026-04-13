@@ -1,14 +1,14 @@
 """
 maf_harness.orchestration.multi_agent
 ======================================
-实现 Anthropic 的"多大脑、多双手"模式。
+Implements Anthropic's "many brains, many hands" pattern.
 
-  - 专家代理：ResearchAgent、CodeAgent、SummariseAgent
-  - OrchestratorAgent 将任务委派给专家并聚合结果
-  - 通过 AF WorkflowBuilder 实现基于图的路由
-  - run_many_brains()：N 个无状态 Foundry 编排器并行运行
+  - Specialist agents: ResearchAgent, CodeAgent, SummariseAgent
+  - OrchestratorAgent delegates tasks to specialists and aggregates results
+  - Graph-based routing via AF WorkflowBuilder
+  - run_many_brains(): N stateless Foundry harnesses run in parallel
 
-所有 LLM 调用使用 FoundryChatClient — 无 OpenAI 依赖。
+All LLM calls use FoundryChatClient — zero OpenAI dependency.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from maf_harness.sandbox.sandbox import SandboxManager, SandboxResources
 from maf_harness.session.session_log import EventKind, SessionEvent, SessionLog
 
 
-# ── 共享客户端工厂 ─────────────────────────────────────────────────────────
+# ── Shared Client Factory ───────────────────────────────────────────────────
 
 def _client() -> FoundryChatClient:
     return make_foundry_client()
@@ -49,15 +49,15 @@ def _agent(name: str, instructions: str, tools: list | None = None) -> Agent:
         )
 
 
-# ── 专家代理 ─────────────────────────────────────────────────────────────
+# ── Specialist Agents ──────────────────────────────────────────────────────
 
 def make_research_agent(sandbox_mgr: SandboxManager) -> Agent:
-    """研究大脑 — 仅使用 web_search 沙箱工具。"""
+    """Research brain — uses only web_search sandbox tool."""
 
     async def web_search(
-        query: Annotated[str, Field(description="搜索查询")],
+        query: Annotated[str, Field(description="Search query")],
     ) -> str:
-        """在网上搜索信息。"""
+        """Search the web for information."""
         sid = await sandbox_mgr.provision(SandboxResources(allowed_tools=["web_search"]))
         result = await sandbox_mgr.execute(sid, "web_search", query)
         sandbox_mgr.reclaim(sid)
@@ -75,12 +75,12 @@ def make_research_agent(sandbox_mgr: SandboxManager) -> Agent:
 
 
 def make_code_agent(sandbox_mgr: SandboxManager) -> Agent:
-    """代码大脑 — 仅使用 run_python 沙箱工具。"""
+    """Code brain — uses only run_python sandbox tool."""
 
     async def run_python(
-        code: Annotated[str, Field(description="要执行的 Python 代码")],
+        code: Annotated[str, Field(description="Python code to execute")],
     ) -> str:
-        """执行 Python 代码并返回输出。"""
+        """Execute Python code and return output."""
         sid = await sandbox_mgr.provision(SandboxResources(allowed_tools=["run_python"]))
         result = await sandbox_mgr.execute(sid, "run_python", code)
         sandbox_mgr.reclaim(sid)
@@ -98,7 +98,7 @@ def make_code_agent(sandbox_mgr: SandboxManager) -> Agent:
 
 
 def make_summarise_agent() -> Agent:
-    """总结大脑 — 纯推理，不需要沙箱。"""
+    """Summarisation brain — pure reasoning, no sandbox needed."""
     return _agent(
         name="SummariseAgent",
         instructions=(
@@ -115,26 +115,26 @@ def make_orchestrator_agent(
     summarise_agent: Agent,
 ) -> Agent:
     """
-    编排器大脑。
-    实现"大脑可以将双手传递给彼此"。
+    Orchestrator brain.
+    Implements "brains can pass hands to each other".
     """
 
     async def delegate_research(
-        task: Annotated[str, Field(description="要委派的研究任务")],
+        task: Annotated[str, Field(description="Research task to delegate")],
     ) -> str:
-        """将研究任务委派给 ResearchAgent。"""
+        """Delegate research task to ResearchAgent."""
         return await research_agent.run(task)
 
     async def delegate_code(
-        task: Annotated[str, Field(description="要委派的编码任务")],
+        task: Annotated[str, Field(description="Coding task to delegate")],
     ) -> str:
-        """将编码任务委派给 CodeAgent。"""
+        """Delegate coding task to CodeAgent."""
         return await code_agent.run(task)
 
     async def delegate_summarise(
-        text: Annotated[str, Field(description="要总结的文本")],
+        text: Annotated[str, Field(description="Text to summarise")],
     ) -> str:
-        """将总结任务委派给 SummariseAgent。"""
+        """Delegate summarisation task to SummariseAgent."""
         return await summarise_agent.run(f"Summarise:\n\n{text}")
 
     return _agent(
@@ -151,7 +151,7 @@ def make_orchestrator_agent(
     )
 
 
-# ── 基于图的工作流（AF WorkflowBuilder）─────────────────────────────────────
+# ── Graph-based Workflow (AF WorkflowBuilder) ──────────────────────────────
 
 def build_multi_agent_workflow(
     session_log: SessionLog,
@@ -159,13 +159,13 @@ def build_multi_agent_workflow(
     sandbox_mgr: SandboxManager,
 ):
     """
-    构建 AF 工作流图：
+    Build AF workflow graph:
 
         [classify] → research   ─┐
                    → code        ├→ summarise → END
                    → orchestrate ─┘
 
-    InMemoryCheckpointStorage 在编排器重启后保留工作流状态。
+    InMemoryCheckpointStorage preserves workflow state across harness restarts.
     """
     research_agent  = make_research_agent(sandbox_mgr)
     code_agent      = make_code_agent(sandbox_mgr)
@@ -173,7 +173,7 @@ def build_multi_agent_workflow(
     orchestrator    = make_orchestrator_agent(research_agent, code_agent, summarise_agent)
 
     async def classify_task(task: str) -> dict:
-        """将任务路由到适当的专家代理。"""
+        """Route task to appropriate specialist agent."""
         t = task.lower()
         if any(k in t for k in ["code", "calculate", "compute", "script", "python"]):
             agent_type = "code"
@@ -218,7 +218,7 @@ def build_multi_agent_workflow(
     return builder.build()
 
 
-# ── 多大脑并行启动器 ─────────────────────────────────────────────────────────
+# ── Many Brains Parallel Launcher ─────────────────────────────────────────
 
 async def run_many_brains(
     tasks:       list[str],
@@ -226,14 +226,14 @@ async def run_many_brains(
     sandbox_mgr: SandboxManager,
 ) -> list[dict]:
     """
-    为每个任务生成一个无状态的 Foundry 编排器，并发运行。
+    Spawn a stateless Foundry harness for each task and run them concurrently.
 
-    每个编排器：
-      - 拥有自己的 session_id 和事件日志条目
-      - 仅在实际执行工具时才创建沙箱
-      - 任务完成后丢弃（无状态 / 可替换）
+    Each harness:
+      - Has its own session_id and event log entries
+      - Creates sandbox only when actually executing tools
+      - Is discarded after task completion (stateless / cattle)
 
-    这重现了 Anthropic 在并行工作负载中改善 p50 TTFT 的效果。
+    This reproduces Anthropic's p50 TTFT improvement on parallel workloads.
     """
     from maf_harness.harness.harness import AgentHarness, HarnessConfig
 

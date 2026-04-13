@@ -1,11 +1,11 @@
 """
 maf_harness.skills.skills
 ==========================
-封装为 Microsoft Agent Framework 技能的可复用领域能力。
+Reusable domain capabilities encapsulated as Microsoft Agent Framework Skills.
 
-技能定义了大脑知道如何做什么（指令 + 结构）。
-实际执行通过 sandbox.execute() 完成 — 技能和沙箱
-是正交的关注点。
+Skills define what the brain knows how to do (instructions + structure).
+Actual execution is done via sandbox.execute() — skills and sandbox
+are orthogonal concerns.
 
 AF API: Skill, SkillScript, SkillsProvider
 """
@@ -22,7 +22,7 @@ def _dedent(text: str) -> str:
     return textwrap.dedent(text).strip()
 
 
-# ── 技能定义 ─────────────────────────────────────────────────────────────
+# ── Skill Definitions ─────────────────────────────────────────────────────────────
 
 def make_research_skill() -> Skill:
     return Skill(
@@ -141,7 +141,7 @@ def make_orchestration_skill() -> Skill:
     )
 
 
-# ── 技能提供者工厂 ───────────────────────────────────────────────────────────
+# ── Skills Provider Factory ───────────────────────────────────────────────────────
 
 _ALL: dict[str, callable] = {
     "research":       make_research_skill,
@@ -153,8 +153,8 @@ _ALL: dict[str, callable] = {
 
 def build_skills_provider(skill_names: list[str] | None = None) -> SkillsProvider:
     """
-    构建包含所请求技能的 AF SkillsProvider。
-    传入 None 表示包含所有技能。
+    Build AF SkillsProvider containing requested skills.
+    Pass None to include all skills.
     """
     names    = skill_names or list(_ALL.keys())
     selected = []

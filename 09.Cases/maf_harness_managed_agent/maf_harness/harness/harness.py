@@ -1,22 +1,22 @@
 """
 maf_harness.harness.harness
 ============================
-编排器是"大脑" — 一个无状态的编排循环，由
-Microsoft Foundry（FoundryChatClient）驱动。它具有以下特性：
+The harness is the "brain" — a stateless orchestration loop,
+driven by Microsoft Foundry (FoundryChatClient). It has the following characteristics:
 
-  1. 无状态    ：所有状态都保存在会话日志中，而非编排器内。
-  2. 解耦      ：仅通过 execute(name, input) → string 调用沙箱。
-  3. 可恢复    ：wake(session_id) 从持久化日志中重新注入上下文。
-  4. Foundry   ：唯一的 LLM 后端是 FoundryChatClient — 无 OpenAI SDK。
+  1. Stateless   : All state is stored in the session log, not in the harness.
+  2. Decoupled   : Calls sandboxes only via execute(name, input) → string.
+  3. Recoverable : wake(session_id) rehydrates context from durable log.
+  4. Foundry     : The only LLM backend is FoundryChatClient — zero OpenAI SDK.
 
-必需的环境变量：
+Required environment variables:
     FOUNDRY_PROJECT_ENDPOINT   https://<hub>.services.ai.azure.com
-    FOUNDRY_MODEL              gpt-5.4（任何 Foundry 已部署的模型）
+    FOUNDRY_MODEL              gpt-5.4 (any Foundry deployed model)
 
-认证（DefaultAzureCredential 优先级顺序）：
-    1. FOUNDRY_API_KEY 环境变量  → AzureKeyCredential（开发 / CI）
-    2. az login                  → AzureCliCredential（本地开发）
-    3. Managed Identity          → 在 Azure 上自动生效（生产环境）
+Authentication (DefaultAzureCredential precedence):
+    1. FOUNDRY_API_KEY env var  → AzureKeyCredential (dev / CI)
+    2. az login                 → AzureCliCredential (local dev)
+    3. Managed Identity         → automatic on Azure (production)
 """
 
 from __future__ import annotations
@@ -48,17 +48,17 @@ from maf_harness.session.session_log import EventKind, SessionEvent, SessionLog
 from maf_harness.skills.skills import build_skills_provider
 
 
-# ── Foundry 客户端工厂 ────────────────────────────────────────────────────────
+# ── Foundry Client Factory ──────────────────────────────────────────────────
 
 def make_foundry_client(model: str | None = None) -> FoundryChatClient:
     """
-    构建 FoundryChatClient。
+    Build FoundryChatClient.
 
-    认证优先级：
-      1. FOUNDRY_API_KEY 环境变量  → AzureKeyCredential（开发 / CI）
-      2. DefaultAzureCredential    → az login / Managed Identity（生产环境）
+    Authentication priority:
+      1. FOUNDRY_API_KEY env var  → AzureKeyCredential (dev / CI)
+      2. DefaultAzureCredential   → az login / Managed Identity (production)
 
-    通过环境变量配置（如未显式传递）：
+    Configured via environment variables (if not explicitly passed):
       FOUNDRY_PROJECT_ENDPOINT
       FOUNDRY_MODEL
     """
@@ -80,15 +80,15 @@ def make_foundry_client(model: str | None = None) -> FoundryChatClient:
     )
 
 
-# ── 编排器配置 ─────────────────────────────────────────────────────────────
+# ── Harness Configuration ───────────────────────────────────────────────────────
 
 @dataclass
 class HarnessConfig:
-    """每个编排器的配置。"""
+    """Configuration per harness."""
     agent_name:          str       = "ManagedAgent"
-    model:               str       = ""          # 回退到 FOUNDRY_MODEL 环境变量
+    model:               str       = ""          # Falls back to FOUNDRY_MODEL env var
     max_iterations:      int       = 20
-    context_window_size: int       = 30          # wake() 时重新加载的事件数
+    context_window_size: int       = 30          # Events reloaded on wake()
     skill_names:         list[str] = field(default_factory=lambda: [
                                         "research", "code_execution",
                                         "summarise", "orchestration",
@@ -97,7 +97,7 @@ class HarnessConfig:
     sandbox_timeout_sec: int       = 30
 
 
-# ── 沙箱工具包装器 ─────────────────────────────────────────────────────────
+# ── Sandbox Tool Wrappers ───────────────────────────────────────────────────────
 
 def build_sandbox_tools(
     sandbox_mgr: SandboxManager,
@@ -105,9 +105,9 @@ def build_sandbox_tools(
     session_id:  str,
 ) -> list[Callable]:
     """
-    将 sandbox.execute(name, input) 包装为带类型的 AF 工具函数。
-    沙箱在首次工具调用时延迟创建 — 仅需推理的会话
-    永远不会承担创建开销（TTFT 优化）。
+    Wraps sandbox.execute(name, input) as typed AF tool functions.
+    Sandboxes are lazily created on first tool call — reasoning-only sessions
+    never incur creation overhead (TTFT optimization).
     """
     _state: dict[str, str | None] = {"sandbox_id": None}
 
@@ -149,57 +149,57 @@ def build_sandbox_tools(
                     return f"[SANDBOX FAILED after retry] {exc}"
         return "[SANDBOX FAILED]"
 
-    # ── 带类型的 AF 工具函数 ───────────────────────────────────────────────
+    # ── Typed AF Tool Functions ───────────────────────────────────────────────
 
     async def run_python(
-        code: Annotated[str, Field(description="在隔离沙箱中执行的 Python 代码。")],
+        code: Annotated[str, Field(description="Python code to execute in isolated sandbox.")],
     ) -> str:
-        """在沙箱中执行 Python 代码并返回标准输出。"""
+        """Execute Python code in sandbox and return stdout."""
         return await _exec("run_python", code)
 
     async def web_search(
-        query: Annotated[str, Field(description="要在网上搜索的查询内容。")],
+        query: Annotated[str, Field(description="Query to search on the web.")],
     ) -> str:
-        """搜索网络并返回摘要结果。"""
+        """Search the web and return summarized results."""
         return await _exec("web_search", query)
 
     async def write_file(
-        path:    Annotated[str, Field(description="目标文件路径。")],
-        content: Annotated[str, Field(description="要写入的内容。")],
+        path:    Annotated[str, Field(description="Target file path.")],
+        content: Annotated[str, Field(description="Content to write.")],
     ) -> str:
-        """将内容写入沙箱文件系统中的文件。"""
+        """Write content to a file in sandbox filesystem."""
         return await _exec("write_file", f"{path}::{content}")
 
     async def read_file(
-        path: Annotated[str, Field(description="要读取的文件路径。")],
+        path: Annotated[str, Field(description="File path to read.")],
     ) -> str:
-        """从沙箱文件系统中读取文件。"""
+        """Read a file from sandbox filesystem."""
         return await _exec("read_file", path)
 
     async def get_session_context(
-        last_n: Annotated[int, Field(description="要检索的最近事件数量。")] = 10,
+        last_n: Annotated[int, Field(description="Number of recent events to retrieve.")] = 10,
     ) -> str:
-        """从会话日志中检索最近事件作为上下文。"""
+        """Retrieve recent events from session log for context."""
         events = await session_log.get_context_window(session_id, last_n=last_n)
         return "\n".join(f"[{e.kind.value}] {e.payload}" for e in events) or "(no events)"
 
     return [run_python, web_search, write_file, read_file, get_session_context]
 
 
-# ── 代理编排器 — 大脑 ─────────────────────────────────────────────────────
+# ── Agent Harness — Brain ─────────────────────────────────────────────────────
 
 class AgentHarness:
     """
-    由 Microsoft Foundry 驱动的无状态编排器。
+    Stateless harness driven by Microsoft Foundry.
 
-    生命周期：
-        harness = AgentHarness(session_log, sandbox_mgr, config)
-        await harness.start(session_id)        # 若会话已存在则执行 wake()
-        response = await harness.run(message)  # 一次代理循环轮次
+    Lifecycle:
+        harness = AgentHarness(...)
+        await harness.start(session_id)        # wake() if session exists
+        response = await harness.run(message)  # one agent loop turn
         await harness.shutdown()
 
-    崩溃时：创建新的编排器，调用 start(同一个 session_id)。
-    wake() 会重新注入完整的事件历史 — 无数据丢失。
+    On crash: create a new harness, call start(same session_id).
+    wake() rehydrates full event history — zero data loss.
     """
 
     def __init__(
@@ -212,17 +212,17 @@ class AgentHarness:
         self.session_log = session_log
         self.sandbox_mgr = sandbox_mgr
         self.config      = config or HarnessConfig()
-        self._client     = client   # 注入预构建的客户端（测试 / 复用）
+        self._client     = client   # Inject pre-built client (testing / reuse)
         self._agent:           Agent | None                 = None
         self._session_id:      str | None                   = None
         self._history_provider: InMemoryHistoryProvider | None = None
 
-    # ── 启动 / 唤醒 ──────────────────────────────────────────────────────────
+    # ── Start / Wake ──────────────────────────────────────────────────────────────
 
     async def start(self, session_id: str) -> None:
         """
-        附加到一个会话。如果会话已有事件，则执行
-        wake() — 编排器从持久化日志中重建上下文，不丢失任何历史记录。
+        Attach to a session. If session has existing events, perform
+        wake() — harness rebuilds context from durable log without losing any history.
         """
         self._session_id = session_id
 
@@ -278,10 +278,10 @@ class AgentHarness:
             base += f"\n\nMost recent session events:\n{summary}\n"
         return base
 
-    # ── 运行 ───────────────────────────────────────────────────────────────
+    # ── Execution ───────────────────────────────────────────────────────────────
 
     async def run(self, user_input: str) -> str:
-        """通过 Foundry 执行一次代理循环轮次。"""
+        """Execute one agent loop iteration via Foundry."""
         if self._agent is None or self._session_id is None:
             raise RuntimeError("Harness not started. Call start(session_id) first.")
         try:
@@ -307,7 +307,7 @@ class AgentHarness:
             raise
 
     async def run_streaming(self, user_input: str):
-        """逐步返回从 Foundry 到达的响应文本块。"""
+        """Yield response text chunks as they arrive from Foundry."""
         if self._agent is None:
             raise RuntimeError("Harness not started.")
         async for chunk in self._agent.run(user_input, stream=True):
@@ -315,7 +315,7 @@ class AgentHarness:
                 yield chunk.text
 
     async def shutdown(self) -> None:
-        """向持久化日志发出 SESSION_END 事件。"""
+        """Emit SESSION_END event to durable log."""
         if self._session_id:
             await self.session_log.emit_event(
                 self._session_id,

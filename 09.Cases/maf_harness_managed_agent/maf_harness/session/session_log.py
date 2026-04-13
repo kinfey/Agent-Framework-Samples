@@ -1,17 +1,17 @@
 """
 maf_harness.session.session_log
 ================================
-持久化、仅追加事件日志 — Anthropic 托管代理架构中的"会话"层。
+Durable, append-only event log — the "Session" layer in Anthropic's Managed Agent architecture.
 
-关键接口（对应 Anthropic 文章）：
+Key interfaces (mapping to Anthropic article):
     create_session(task)            → session_id
-    emit_event(session_id, event)   → 追加到日志
-    get_events(session_id, ...)     → 位置/过滤切片
-    get_session(session_id)         → AF AgentSession 元数据
-    wake(session_id)                → (session, all_events) 用于编排器恢复
-    get_context_window(session_id)  → 最近 N 条事件，用于上下文工程
+    emit_event(session_id, event)   → append to log
+    get_events(session_id, ...)     → positional/filtered slicing
+    get_session(session_id)         → AF AgentSession metadata
+    wake(session_id)                → (session, all_events) for harness recovery
+    get_context_window(session_id)  → recent N events for context engineering
 
-底层使用 AF InMemoryHistoryProvider（生产环境替换为 CosmosDB / Redis）。
+Underlying uses AF InMemoryHistoryProvider (replace with CosmosDB / Redis in production).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from typing import Any
 from agent_framework import AgentSession, InMemoryHistoryProvider, Message, Role
 
 
-# ── 事件模型 ───────────────────────────────────────────────────────────────────
+# ── Event Model ───────────────────────────────────────────────────────────────
 
 class EventKind(str, Enum):
     SESSION_START   = "session_start"
@@ -60,15 +60,15 @@ class SessionEvent:
         }
 
 
-# ── 会话日志 ───────────────────────────────────────────────────────────────────
+# ── Session Log ───────────────────────────────────────────────────────────────
 
 class SessionLog:
     """
-    仅追加、持久化事件存储。
+    Append-only, durable event store.
 
-    会话存在于编排器和沙箱之外。
-    如果编排器崩溃，会话不受影响；新编排器
-    调用 wake(session_id) 从最后一个事件处恢复。
+    Sessions exist outside the harness and sandbox.
+    If the harness crashes, the session is unaffected; a new harness
+    calls wake(session_id) to recover from the last event.
     """
 
     def __init__(self) -> None:
@@ -77,14 +77,14 @@ class SessionLog:
         self._history:  dict[str, InMemoryHistoryProvider]    = {}
         self._lock = asyncio.Lock()
 
-    # ── 生命周期 ─────────────────────────────────────────────────────────────
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def create_session(
         self,
         task:     str,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        """创建新会话并发出 SESSION_START 事件。"""
+        """Create a new session and emit SESSION_START event."""
         session_id = str(uuid.uuid4())
         af_session = AgentSession(session_id=session_id)
 
@@ -104,7 +104,7 @@ class SessionLog:
         return session_id
 
     async def emit_event(self, session_id: str, event: SessionEvent) -> None:
-        """向日志追加一个事件。等价于 emitEvent(id, event)。"""
+        """Append an event to the log. Equivalent to emitEvent(id, event)."""
         event.session_id = session_id
         async with self._lock:
             self._store.setdefault(session_id, []).append(event)
@@ -117,8 +117,8 @@ class SessionLog:
         kind_filter: list[EventKind] | None = None,
     ) -> list[SessionEvent]:
         """
-        返回事件流的位置切片。
-        等价于 getEvents() — "从上次停止的位置继续"。
+        Return positional slice of event stream.
+        Equivalent to getEvents() — "resume from where you left off".
         """
         async with self._lock:
             events = self._store.get(session_id, [])
@@ -128,7 +128,7 @@ class SessionLog:
             return list(sliced)
 
     async def get_session(self, session_id: str) -> AgentSession | None:
-        """检索会话元数据。等价于 getSession(id)。"""
+        """Retrieve session metadata. Equivalent to getSession(id)."""
         return self._sessions.get(session_id)
 
     async def wake(
@@ -136,8 +136,8 @@ class SessionLog:
         session_id: str,
     ) -> tuple[AgentSession | None, list[SessionEvent]]:
         """
-        从持久化会话中重新注入编排器。
-        等价于 wake(sessionId) → (session, event_log)。
+        Rehydrate harness from durable session.
+        Equivalent to wake(sessionId) → (session, event_log).
         """
         session = await self.get_session(session_id)
         events  = await self.get_events(session_id)
@@ -151,19 +151,19 @@ class SessionLog:
         )
         return session, events
 
-    # ── AF 历史记录集成 ────────────────────────────────────────────────────────
+    # ── AF History Integration ────────────────────────────────────────────────────
 
     def get_history_provider(self, session_id: str) -> InMemoryHistoryProvider | None:
         return self._history.get(session_id)
 
-    # ── 上下文工程 ───────────────────────────────────────────────────────────
+    # ── Context Engineering ──────────────────────────────────────────────────────
 
     async def get_context_window(
         self,
         session_id: str,
         last_n:     int = 20,
     ) -> list[SessionEvent]:
-        """最近 N 条事件 — 基于会话日志的轻量级上下文窗口。"""
+        """Recent N events — lightweight context window based on session log."""
         events = await self.get_events(session_id)
         return events[-last_n:]
 
