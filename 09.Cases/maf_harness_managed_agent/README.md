@@ -1,6 +1,6 @@
 # maf_harness_managed_agent
 
-**Microsoft Agent Framework × Azure AI Foundry**
+**Microsoft Agent Framework × Microsoft Foundry**
 Implementing Anthropic's [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents)
 
 
@@ -334,4 +334,4 @@ recent = await session_log.get_context_window(sid, last_n=30)
 
 - [Anthropic: Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents)
 - [Microsoft Agent Framework](https://github.com/microsoft/agent-framework)
-- [Azure AI Foundry](https://ai.azure.com)
+- [Microsoft Foundry](https://ai.azure.com)
