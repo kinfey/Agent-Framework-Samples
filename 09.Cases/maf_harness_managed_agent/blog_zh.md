@@ -1,21 +1,8 @@
 # 基于 Microsoft Agent Framework 与 Azure 实现云原生的 Anthropic Managed Agent 架构
 
-> Anthropic 在 [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents) 中提出了一个核心命题：**Agent 系统的可靠性取决于组件之间的解耦程度，而非单一组件的复杂度**。本文将这套架构理论完整落地到 **Microsoft Agent Framework（MAF）+ Azure AI Foundry** 技术栈上，并通过可运行的代码验证每一个设计决策。
+> Anthropic 在 [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents) 中提出了一个核心命题：**Agent 系统的可靠性取决于组件之间的解耦程度，而非单一组件的复杂度**。本文将这套架构理论完整落地到 **Microsoft Agent Framework（MAF）+ Microsoft Foundry** 技术栈上,并通过可运行的代码验证每一个设计决策。
 
-**内容结构**
-
-| 章节 | 主题 | 对应 Anthropic 概念 |
-|------|------|---------------------|
-| 一 | 单体 Agent 的失败模式分析 | "Don't adopt a pet" |
-| 二 | 三层解耦架构全景 | Session / Harness / Sandbox |
-| 三 | Session：持久化事件日志 | `emitEvent` · `getEvents` · `wake` |
-| 四 | Sandbox：可替换的执行环境 | `execute(name, input) → string` |
-| 五 | Harness：无状态编排器 | 崩溃恢复 · `wake(sessionId)` |
-| 六 | MAF 原生扩展：Skill · Middleware · Foundry | 超越三层的工程实践 |
-| 七 | 多大脑多双手：并行编排 | "Many brains, many hands" |
-| 八 | 延迟沙箱创建与 TTFT 优化 | p50 ↓60%、p95 ↓90% |
-| 九 | Azure Functions 无状态托管 | Serverless 部署 |
-| 十 | 开发到生产的接口稳定性 | "Opinionated about interfaces" |
+![logo](./imgs/logo.png)
 
 ---
 
@@ -80,7 +67,7 @@ Anthropic 的解决方案是将 Agent 虚拟化为三个独立接口，每个接
 
 > "Operating systems have lasted decades by virtualizing the hardware into abstractions general enough for programs that didn't exist yet. The `read()` command is agnostic as to whether it's accessing a disk pack from the 1970s or a modern SSD."
 
-MAF 提供了落地这套架构所需的全部原语：`Agent` 作为编排器核心、`Skill` 注入领域知识、`@agent_middleware` 处理横切关注点、`FoundryChatClient` 连接 Azure AI Foundry 模型端点。下面逐层展开实现。
+MAF 提供了落地这套架构所需的全部原语：`Agent` 作为编排器核心、`Skill` 注入领域知识、`@agent_middleware` 处理横切关注点、`FoundryChatClient` 连接 Microsoft Foundry 模型端点。下面逐层展开实现。
 
 ---
 
@@ -360,7 +347,7 @@ class SandboxManager:
 ```python
 class AgentHarness:
     """
-    由 Azure AI Foundry 驱动的无状态编排器。
+    由 Microsoft Foundry 驱动的无状态编排器。
     崩溃时：创建新实例，调用 start(同一个 session_id)，
     wake() 自动从持久化日志重建完整上下文。
     """
@@ -467,7 +454,7 @@ print(f"[LOG] 最终: {n_after} 条事件（恢复后增加 {n_after - n_before}
 
 ### Foundry 客户端工厂 — 零 OpenAI SDK 依赖
 
-LLM 后端选择是一个架构决策。直接依赖 OpenAI SDK 意味着与特定供应商绑定 — 模型定价变更、API 版本迭代、区域合规限制都会直接影响系统。`FoundryChatClient` 通过 Azure AI Foundry 统一入口消除了这一耦合：
+LLM 后端选择是一个架构决策。直接依赖 OpenAI SDK 意味着与特定供应商绑定 — 模型定价变更、API 版本迭代、区域合规限制都会直接影响系统。`FoundryChatClient` 通过 Microsoft Foundry 统一入口消除了这一耦合：
 
 ```python
 def make_foundry_client(model: str | None = None) -> FoundryChatClient:
@@ -693,7 +680,7 @@ async def run_many_brains(tasks, session_log, sandbox_mgr) -> list[dict]:
 tasks = [
     "What is the capital of Japan? One sentence only.",        # 纯推理 → 不创建沙箱
     "Calculate the sum of squares from 1 to 10 using Python.", # 需要 run_python → 创建沙箱
-    "Give one fun fact about Microsoft Azure AI Foundry.",     # 纯推理 → 不创建沙箱
+    "Give one fun fact about Microsoft Foundry.",     # 纯推理 → 不创建沙箱
 ]
 results = await run_many_brains(tasks, session_log, sandbox_mgr)
 # 三个任务并行执行，总耗时 ≈ max(单个任务耗时)
@@ -888,7 +875,7 @@ Anthropic 在文章结尾总结了他们的设计哲学：
 
 Anthropic 的 Managed Agent 架构回答了一个操作系统设计中的经典命题 — **"how to design a system for programs as yet unthought of"**。他们的答案与 Unix 哲学一脉相承：将 Agent 的组件虚拟化为稳定的接口，让实现随模型能力的演进自由替换。
 
-通过 Microsoft Agent Framework 和 Azure AI Foundry，本项目将这套理论变成了可运行、可验证、可部署的工程实践：
+通过 Microsoft Agent Framework 和 Microsoft Foundry，本项目将这套理论变成了可运行、可验证、可部署的工程实践：
 
 | Anthropic 概念 | MAF 实现 |
 |----------------|----------|
@@ -912,5 +899,4 @@ session, events = await session_log.wake(session_id)       # 恢复状态
 
 ---
 
-*项目代码：[maf_harness_managed_agent](https://github.com/maf_harness_managed_agent)*
-*参考：[Anthropic — Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents) · [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) · [Azure AI Foundry](https://ai.azure.com)*
+*参考：[Anthropic — Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents) · [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) · [Microsoft Foundry](https://ai.azure.com)*

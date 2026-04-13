@@ -3,6 +3,9 @@
 **Microsoft Agent Framework × Microsoft Foundry**  
 实现 Anthropic 的 [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents)（扩展托管代理：将大脑与双手解耦）
 
+
+![logo](./imgs/logo.png)
+
 ---
 
 ## 项目结构
@@ -196,4 +199,4 @@ recent = await session_log.get_context_window(sid, last_n=30)
 - [Anthropic: Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents)
 - [Microsoft Agent Framework](https://github.com/microsoft/agent-framework)
 - [AF Python 文档](https://learn.microsoft.com/en-us/agent-framework/)
-- [Azure AI Foundry](https://ai.azure.com)
+- [Microsoft Foundry](https://ai.azure.com)

@@ -1,21 +1,9 @@
 # Implementing Cloud-Native Anthropic Managed Agent Architecture with Microsoft Agent Framework and Azure
 
-> Anthropic proposed a core thesis in [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents): **the reliability of an Agent system depends on the degree of decoupling between components, not on the complexity of any single component**. This article implements that architectural theory end-to-end on the **Microsoft Agent Framework (MAF) + Azure AI Foundry** stack, validating every design decision with runnable code.
+> Anthropic proposed a core thesis in [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents): **the reliability of an Agent system depends on the degree of decoupling between components, not on the complexity of any single component**. This article implements that architectural theory end-to-end on the **Microsoft Agent Framework (MAF) + Microsoft Foundry** stack, validating every design decision with runnable code.
 
-**Content Structure**
 
-| Section | Topic | Corresponding Anthropic Concept |
-|---------|-------|---------------------------------|
-| 1 | Failure Mode Analysis of Monolithic Agents | "Don't adopt a pet" |
-| 2 | Three-Layer Decoupled Architecture Overview | Session / Harness / Sandbox |
-| 3 | Session: Durable Event Log | `emitEvent` · `getEvents` · `wake` |
-| 4 | Sandbox: Disposable Execution Environment | `execute(name, input) → string` |
-| 5 | Harness: Stateless Orchestrator | Crash recovery · `wake(sessionId)` |
-| 6 | MAF-Native Extensions: Skill · Middleware · Foundry | Beyond the three layers |
-| 7 | Many Brains, Many Hands: Parallel Orchestration | "Many brains, many hands" |
-| 8 | Lazy Sandbox Provisioning and TTFT Optimization | p50 ↓60%, p95 ↓90% |
-| 9 | Azure Functions Stateless Hosting | Serverless deployment |
-| 10 | Interface Stability from Dev to Production | "Opinionated about interfaces" |
+![logo](./imgs/logo.png)
 
 ---
 
@@ -81,7 +69,7 @@ This layered design philosophy is deeply aligned with operating systems. Anthrop
 
 > "Operating systems have lasted decades by virtualizing the hardware into abstractions general enough for programs that didn't exist yet. The `read()` command is agnostic as to whether it's accessing a disk pack from the 1970s or a modern SSD."
 
-MAF provides all the primitives needed to implement this architecture: `Agent` as the orchestrator core, `Skill` for injecting domain knowledge, `@agent_middleware` for cross-cutting concerns, and `FoundryChatClient` for connecting to Azure AI Foundry model endpoints. Let's walk through each layer.
+MAF provides all the primitives needed to implement this architecture: `Agent` as the orchestrator core, `Skill` for injecting domain knowledge, `@agent_middleware` for cross-cutting concerns, and `FoundryChatClient` for connecting to Microsoft Foundry model endpoints. Let's walk through each layer.
 
 ---
 
@@ -363,7 +351,7 @@ The operational significance of statelessness is profound: no sticky sessions ne
 ```python
 class AgentHarness:
     """
-    Stateless orchestrator powered by Azure AI Foundry.
+    Stateless orchestrator powered by Microsoft Foundry.
     On crash: create a new instance, call start(same session_id),
     and wake() automatically rebuilds full context from the durable log.
     """
@@ -470,7 +458,7 @@ The key point: `h2` has no knowledge that `h1` ever existed. It only knows that 
 
 ### Foundry Client Factory — Zero OpenAI SDK Dependency
 
-LLM backend selection is an architectural decision. Directly depending on the OpenAI SDK means coupling to a specific vendor — model pricing changes, API version iterations, and regional compliance restrictions all directly impact the system. `FoundryChatClient` eliminates this coupling through Azure AI Foundry's unified entry point:
+LLM backend selection is an architectural decision. Directly depending on the OpenAI SDK means coupling to a specific vendor — model pricing changes, API version iterations, and regional compliance restrictions all directly impact the system. `FoundryChatClient` eliminates this coupling through Microsoft Foundry's unified entry point:
 
 ```python
 def make_foundry_client(model: str | None = None) -> FoundryChatClient:
@@ -697,7 +685,7 @@ async def run_many_brains(tasks, session_log, sandbox_mgr) -> list[dict]:
 tasks = [
     "What is the capital of Japan? One sentence only.",        # Pure reasoning → no sandbox
     "Calculate the sum of squares from 1 to 10 using Python.", # Needs run_python → sandbox created
-    "Give one fun fact about Microsoft Azure AI Foundry.",     # Pure reasoning → no sandbox
+    "Give one fun fact about Microsoft Foundry.",     # Pure reasoning → no sandbox
 ]
 results = await run_many_brains(tasks, session_log, sandbox_mgr)
 # Three tasks execute in parallel; total time ≈ max(individual task time)
@@ -892,7 +880,7 @@ Every substitution is an implementation-level change. It touches no orchestratio
 
 Anthropic's Managed Agent architecture answers a classic proposition in operating system design — **"how to design a system for programs as yet unthought of."** Their answer is deeply aligned with Unix philosophy: virtualize Agent components into stable interfaces, letting implementations freely evolve as model capabilities advance.
 
-Through Microsoft Agent Framework and Azure AI Foundry, this project turns that theory into runnable, verifiable, deployable engineering practice:
+Through Microsoft Agent Framework and Microsoft Foundry, this project turns that theory into runnable, verifiable, deployable engineering practice:
 
 | Anthropic Concept | MAF Implementation |
 |-------------------|--------------------|
@@ -916,5 +904,4 @@ Stable interfaces, swappable implementations. Stateless brains, disposable hands
 
 ---
 
-*Project code: [maf_harness_managed_agent](https://github.com/maf_harness_managed_agent)*
-*References: [Anthropic — Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents) · [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) · [Azure AI Foundry](https://ai.azure.com)*
+*References: [Anthropic — Scaling Managed Agents](https://www.anthropic.com/engineering/managed-agents) · [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) · [Microsoft Foundry](https://ai.azure.com)*

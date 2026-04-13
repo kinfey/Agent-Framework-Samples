@@ -191,7 +191,7 @@ async def demo_many_brains() -> None:
     tasks = [
         "What is the capital of Japan? One sentence only.",
         "Calculate the sum of squares from 1 to 10 using Python.",
-        "Give one fun fact about Microsoft Azure AI Foundry.",
+        "Give one fun fact about Microsoft Foundry.",
     ]
 
     print(f"\n[ORCHESTRATOR] 启动 {len(tasks)} 个并行 Foundry 大脑…")
