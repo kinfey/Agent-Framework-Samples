@@ -3,6 +3,9 @@
 **Microsoft Agent Framework × Azure AI Foundry**
 Implementing Anthropic's [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents)
 
+
+![logo](./imgs/logo.png)
+
 Blog post: [English](blog_en.md) | [中文](blog_zh.md)
 
 ---
