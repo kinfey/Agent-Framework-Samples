@@ -211,5 +211,10 @@ ls -t sessions/ | head -1 | xargs -I {} jq -c . sessions/{}
 ## 部署到 Microsoft Foundry
 
 
+
+```bash
+azd up
+```
+
 随后遵循 hosted-agent 部署流程:<https://learn.microsoft.com/en-us/azure/ai-foundry/agents/concepts/hosted-agents?view=foundry&tabs=cli>。
 
