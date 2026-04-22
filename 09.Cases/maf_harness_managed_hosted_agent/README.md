@@ -212,7 +212,6 @@ Expect a sequence like `session_start → tool_call(execute) → tool_result →
 
 ## Deploy to Microsoft Foundry
 
-Build for `linux/amd64` and deploy with the Foundry CLI the same way as the upstream sample:
 
 ```bash
 azd up
