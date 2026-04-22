@@ -1,0 +1,3 @@
+{"index": 0, "session_id": "3ff78951-09b9-4f96-a435-97f7fe2c773d", "type": "session_start", "payload": {"agent": "ManagedStyleAgent", "model": "gpt-5.4"}, "ts": 1776857736.595028}
+{"index": 1, "session_id": "3ff78951-09b9-4f96-a435-97f7fe2c773d", "type": "tool_call", "payload": {"name": "python_exec", "input": "{'code': 'print(2**20)'}"}, "ts": 1776857745.872229}
+{"index": 2, "session_id": "3ff78951-09b9-4f96-a435-97f7fe2c773d", "type": "tool_result", "payload": {"name": "python_exec", "output": "1048576\n"}, "ts": 1776857745.911106}
