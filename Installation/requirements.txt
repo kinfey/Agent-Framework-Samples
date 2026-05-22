@@ -9,3 +9,6 @@ agent-framework-github-copilot @ git+https://github.com/microsoft/agent-framewor
 agent-framework-declarative @ git+https://github.com/microsoft/agent-framework.git@main#subdirectory=python/packages/declarative
 agent-framework-foundry-local @ git+https://github.com/microsoft/agent-framework.git@main#subdirectory=python/packages/foundry_local
 agent-framework-orchestrations @ git+https://github.com/microsoft/agent-framework.git@main#subdirectory=python/packages/orchestrations
+agent-framework-hyperlight @ git+https://github.com/microsoft/agent-framework.git@main#subdirectory=python/packages/hyperlight
+agent-framework-monty @ git+https://github.com/microsoft/agent-framework.git@main#subdirectory=python/packages/monty
+agent-framework-tools @ git+https://github.com/microsoft/agent-framework.git@main#subdirectory=python/packages/tools
